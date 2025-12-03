@@ -2,6 +2,7 @@ import logging
 import traceback
 import os
 import asyncio
+import unicodedata
 from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
@@ -22,6 +23,15 @@ TOKEN = "8553000638:AAF4tg-TYtdSYsbUbDMExI9o2ltETsERwcA"
 
 # Словарь для хранения задач таймеров
 timer_tasks = {}
+
+# Функция для нормализации текста (решает проблемы с кодировкой эмодзи на разных платформах)
+def normalize_text(text):
+    """Нормализует текст для надежного сравнения на разных платформах"""
+    if not text:
+        return ""
+    # Нормализуем Unicode (NFC форма)
+    normalized = unicodedata.normalize('NFC', text)
+    return normalized.strip()
 
 # Главная клавиатура
 def get_main_keyboard():
@@ -324,7 +334,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data['waiting_for_admin_panel_password'] = True
 
-    elif text == "📊 Получить отчет":
+    elif "Получить отчет" in normalize_text(text):
         if context.user_data.get('is_admin'):
             from data_storage import get_all_results
 
@@ -388,7 +398,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_main_keyboard()
             )
 
-    elif text == "📋 Отчет по итоговому тесту":
+    elif "Отчет по итоговому тесту" in normalize_text(text):
         if context.user_data.get('is_admin'):
             results = get_all_final_results()
             if not results:
@@ -468,18 +478,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data['waiting_for_final_test_password'] = True
 
-    elif text == "🔙 Назад":
-        if context.user_data.get('is_admin'):
-            await update.message.reply_text(
-                "Возврат в главное меню",
-                reply_markup=get_main_keyboard()
-            )
-            context.user_data['is_admin'] = False
-        else:
-            await update.message.reply_text(
-                "Возврат в главное меню",
-                reply_markup=get_main_keyboard()
-            )
+    elif context.user_data.get('is_admin') and ("Назад" in normalize_text(text) or normalize_text(text) == "🔙 Назад"):
+        # Возврат из админ-панели
+        await update.message.reply_text(
+            "Возврат в главное меню",
+            reply_markup=get_main_keyboard()
+        )
+        context.user_data['is_admin'] = False
 
     elif text == "01: Оформление корпоративных бронирований":
         module_text = (
@@ -553,7 +558,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         topic_number = int(text)
         await send_topic_materials(update, context, topic_number)
 
-    elif text == "Назад":
+    elif normalize_text(text) == "Назад" and not context.user_data.get('is_admin'):
+        # Возврат из обычного меню (не из админ-панели)
         await update.message.reply_text(
             "Возврат в главное меню",
             reply_markup=get_main_keyboard()
